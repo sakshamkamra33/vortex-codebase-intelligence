@@ -73,6 +73,9 @@ VortexRAG is designed to serve as a **recruiter-wowing flagship portfolio piece*
 * **🔐 Go OAuth2 Microservice:** A high-speed, secure, SQLite-backed auth microservice implemented in Go that generates and verifies stateless JWT access tokens.
 * **🌊 Server-Sent Events (SSE):** Real-time, word-by-word streaming of agent progress states and token responses using Next.js 14 and FastAPI.
 
+## 🔗 Live Demo Link
+📍 **[Launch VortexRAG Enterprise Dashboard](https://vortex-codebase-intelligence.vercel.app/)**
+
 ---
 
 ## 📊 4. Demo & Architecture Diagram
