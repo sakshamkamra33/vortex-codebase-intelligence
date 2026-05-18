@@ -505,7 +505,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 👤 Author
 * **Saksham Kamra** - [GitHub](https://github.com/sakshamkamra33)
-
-## 🤝 Acknowledgements
-* Thanks to the Google DeepMind Advanced Agentic Coding team for pairing support.
-* Thanks to the LangGraph core development team for the parallel multi-agent graph references.
