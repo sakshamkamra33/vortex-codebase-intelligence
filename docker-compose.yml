@@ -1,0 +1,114 @@
+version: "3.9"
+
+networks:
+  vortex-net:
+    driver: bridge
+
+volumes:
+  qdrant_storage:
+  neo4j_data:
+  neo4j_logs:
+  redis_data:
+
+services:
+  # ─────────────────────────────────────────────
+  # FastAPI Backend
+  # ─────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: vortex-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - qdrant
+      - neo4j
+      - redis
+    networks:
+      - vortex-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ─────────────────────────────────────────────
+  # Qdrant — Vector Database
+  # ─────────────────────────────────────────────
+  qdrant:
+    image: qdrant/qdrant:v1.9.2
+    container_name: vortex-qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"   # REST API
+      - "6334:6334"   # gRPC
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    networks:
+      - vortex-net
+    environment:
+      - QDRANT__SERVICE__GRPC_PORT=6334
+
+  # ─────────────────────────────────────────────
+  # Neo4j — Graph Database (GraphRAG)
+  # ─────────────────────────────────────────────
+  neo4j:
+    image: neo4j:5.19-community
+    container_name: vortex-neo4j
+    restart: unless-stopped
+    ports:
+      - "7474:7474"   # Browser UI
+      - "7687:7687"   # Bolt protocol
+    environment:
+      - NEO4J_AUTH=neo4j/vortexpassword
+      - NEO4J_PLUGINS=["apoc"]
+      - NEO4J_dbms_security_procedures_unrestricted=apoc.*
+      - NEO4J_dbms_memory_heap_initial__size=512m
+      - NEO4J_dbms_memory_heap_max__size=1G
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    networks:
+      - vortex-net
+
+  # ─────────────────────────────────────────────
+  # Redis — Semantic Cache + Rate Limiting
+  # ─────────────────────────────────────────────
+  redis:
+    image: redis/redis-stack:7.2.0-v9
+    container_name: vortex-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"   # Redis
+      - "8001:8001"   # RedisInsight UI
+    volumes:
+      - redis_data:/data
+    networks:
+      - vortex-net
+    command: redis-stack-server --requirepass vortexredis
+
+  # ─────────────────────────────────────────────
+  # Next.js Frontend
+  # ─────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: vortex-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    depends_on:
+      - backend
+    networks:
+      - vortex-net
+    environment:
+      - NEXT_PUBLIC_API_URL=http://backend:8000
