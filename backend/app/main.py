@@ -22,12 +22,23 @@ async def lifespan(app: FastAPI):
     """Startup and shutdown lifecycle."""
     logger.info("🌀 VortexRAG starting up...")
 
-    # Initialize all database connections
-    await init_qdrant()
-    await init_neo4j()
-    await init_redis()
+    # Initialize all database connections (graceful — app starts even if a service is down)
+    try:
+        await init_qdrant()
+    except Exception as e:
+        logger.warning(f"⚠️  Qdrant unavailable — skipping: {e}")
 
-    logger.info("✅ All services connected. VortexRAG is ready.")
+    try:
+        await init_neo4j()
+    except Exception as e:
+        logger.warning(f"⚠️  Neo4j unavailable — skipping: {e}")
+
+    try:
+        await init_redis()
+    except Exception as e:
+        logger.warning(f"⚠️  Redis unavailable — skipping: {e}")
+
+    logger.info("✅ VortexRAG started (some services may be degraded — check warnings above).")
     yield
 
     logger.info("🛑 VortexRAG shutting down...")
@@ -72,5 +83,5 @@ async def root():
     return {
         "message": "🌀 VortexRAG — Enterprise Codebase Intelligence Platform",
         "docs": "/docs",
-        "health": "/health",
+        "health": "/health", # Reloading backend to pick up .env
     }

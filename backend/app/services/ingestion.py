@@ -2,6 +2,7 @@
 VortexRAG — Ingestion Pipeline Orchestrator (Phase 2)
 Coordinates cloning, AST parsing, embedding, vector DB storage, and graph DB storage.
 """
+import asyncio
 import logging
 import os
 import shutil
@@ -81,12 +82,18 @@ class IngestionPipeline:
 
     async def _store_in_vector_db(self, chunks: List[CodeChunk]):
         """Embeds chunks and stores them in Qdrant in batches."""
+        import uuid
         logger.info(f"🔮 Embedding {len(chunks)} chunks and storing in Qdrant...")
         
         batch_size = 50
+        total_batches = (len(chunks) + batch_size - 1) // batch_size
+        
         for i in range(0, len(chunks), batch_size):
             batch = chunks[i:i + batch_size]
             texts_to_embed = [c.to_embed_text() for c in batch]
+            batch_num = i // batch_size + 1
+            
+            logger.info(f"🔮 Embedding batch {batch_num}/{total_batches} ({len(batch)} chunks)...")
             
             # Embed
             embeddings = await self.embedder.embed(texts_to_embed)
@@ -94,11 +101,7 @@ class IngestionPipeline:
             # Create Qdrant points
             points = []
             for j, chunk in enumerate(batch):
-                # Generate a UUID or int hash from chunk.id (which is sha256 hex)
-                # Qdrant supports UUID strings
-                import uuid
                 point_id = str(uuid.uuid5(uuid.NAMESPACE_OID, chunk.id))
-                
                 points.append(
                     PointStruct(
                         id=point_id,
@@ -112,17 +115,17 @@ class IngestionPipeline:
                             "name": chunk.name,
                             "start_line": chunk.start_line,
                             "end_line": chunk.end_line,
-                            "code": chunk.code, # Store raw code for retrieval
+                            "code": chunk.code,
                         }
                     )
                 )
                 
-            # Upsert
+            # Upsert to Qdrant
             await self.qdrant.upsert(
                 collection_name=settings.QDRANT_COLLECTION_NAME,
                 points=points
             )
-            logger.info(f"Upserted batch {i//batch_size + 1}/{(len(chunks) + batch_size - 1)//batch_size}")
+            logger.info(f"✅ Upserted batch {batch_num}/{total_batches} → {len(points)} vectors in Qdrant")
 
     async def sync_delta_repository(
         self,

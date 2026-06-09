@@ -15,7 +15,8 @@ redis==5.0.4
 redisvl==0.2.3
 
 # ── Embeddings ────────────────────────────────
-voyageai==0.2.3
+google-generativeai>=0.8.0      # FREE: 100 RPM, no payment needed
+voyageai==0.2.3                 # Legacy — kept for reference only
 openai==1.30.5
 
 # ── LangChain / LangGraph ─────────────────────

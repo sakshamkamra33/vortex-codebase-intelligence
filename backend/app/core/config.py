@@ -35,13 +35,16 @@ class Settings(BaseSettings):
             return json.loads(v)
         return v
 
-    # ── AI Providers (Groq & Voyage) ──────────
+    # ── AI Providers ───────────────────────────
     OPENAI_API_KEY: str = ""  # Left for backwards compatibility
     OPENAI_MODEL: str = "gpt-4o"
     GROQ_API_KEY: str = ""
     GROQ_MODEL: str = "llama-3.3-70b-versatile"
-    VOYAGE_API_KEY: str = ""
-    EMBEDDING_MODEL: str = "voyage-code-2"
+    # Google Gemini — free embeddings (100 RPM, no payment needed)
+    # Get key at: https://aistudio.google.com/apikey
+    GOOGLE_API_KEY: str = ""
+    VOYAGE_API_KEY: str = ""  # Kept for reference, no longer used
+    EMBEDDING_MODEL: str = "gemini-embedding-2"
     EMBEDDING_DIMENSION: int = 1536
 
     # ── Qdrant ────────────────────────────────

@@ -27,7 +27,7 @@ export default function QueryPage() {
     try {
       const token = "dummy-token-for-now"; 
       
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/query/ask/stream`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/query/ask/stream`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -157,6 +157,21 @@ export default function QueryPage() {
             </button>
           </div>
         </form>
+
+        {status === "idle" && (
+          <div className="fade-in-up" style={{ textAlign: "center", marginTop: 60, animationDelay: "0.2s" }}>
+            <div style={{ background: "rgba(10,10,15,0.6)", border: "1px dashed var(--color-border)", padding: "32px 48px", borderRadius: "16px", display: "inline-block" }}>
+              <div style={{ fontSize: "2.5rem", marginBottom: 12 }}>📭</div>
+              <h4 style={{ fontSize: "1.2rem", fontWeight: 700, marginBottom: 8 }}>Is your vector database empty?</h4>
+              <p style={{ color: "var(--color-text-faint)", fontSize: "0.95rem", marginBottom: 20, maxWidth: 300 }}>
+                If you haven't ingested any code yet, the agent won't be able to retrieve context to answer your questions.
+              </p>
+              <Link href="/dashboard/ingest" className="btn-ghost" style={{ border: "1px solid rgba(124, 58, 237, 0.4)", color: "#a78bfa", padding: "10px 20px", borderRadius: 8, display: "inline-block" }}>
+                🚀 Ingest a Repository First
+              </Link>
+            </div>
+          </div>
+        )}
 
         {status === "loading" && (
           <div className="fade-in-up glass-card" style={{ padding: 32, animationDelay: "0.2s" }}>

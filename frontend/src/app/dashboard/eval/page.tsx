@@ -12,7 +12,7 @@ export default function EvalPage() {
     setResults(null);
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/eval/run`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/eval/run`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

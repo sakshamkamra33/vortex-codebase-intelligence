@@ -27,7 +27,7 @@ export default function PRReviewPage() {
     setStatus("loading");
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/github/review`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/github/review`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

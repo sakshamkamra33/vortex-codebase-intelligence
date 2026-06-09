@@ -7,6 +7,8 @@ const TECH_STACK = [
   { name: "Qdrant", desc: "Vector DB", color: "#7c3aed", icon: "🔮" },
   { name: "Neo4j", desc: "Graph DB", color: "#06b6d4", icon: "🕸️" },
   { name: "Redis", desc: "Semantic Cache", color: "#ef4444", icon: "⚡" },
+  { name: "Gemini", desc: "Embeddings", color: "#3b82f6", icon: "🌌" },
+  { name: "Groq", desc: "Llama 3 Inference", color: "#f97316", icon: "🦙" },
   { name: "LangGraph", desc: "Agent Loop", color: "#10b981", icon: "🤖" },
   { name: "FastAPI", desc: "Backend", color: "#f59e0b", icon: "🚀" },
   { name: "Ragas", desc: "Evaluation", color: "#a78bfa", icon: "📊" },
@@ -30,7 +32,7 @@ const FEATURES = [
   {
     icon: "🔍",
     title: "Hybrid Search (BM25 + Dense)",
-    desc: "Combines keyword precision (BM25) with semantic understanding (voyage-code-2 embeddings) using Reciprocal Rank Fusion.",
+    desc: "Combines keyword precision (BM25) with semantic understanding (Gemini 1536-dim embeddings) using Reciprocal Rank Fusion.",
     badge: "Phase 3",
     badgeColor: "badge-purple",
   },
@@ -71,7 +73,7 @@ export default function HomePage() {
   useEffect(() => {
     setMounted(true);
     // Check backend health
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/health`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/health`)
       .then((r) => r.ok ? setApiStatus("online") : setApiStatus("offline"))
       .catch(() => setApiStatus("offline"));
   }, []);
@@ -329,9 +331,17 @@ export default function HomePage() {
         fontSize: "0.85rem",
         position: "relative",
         zIndex: 1,
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
       }}>
-        <span className="gradient-text" style={{ fontWeight: 700 }}>VortexRAG</span>
-        {" "}— Enterprise Codebase Intelligence Platform. Built for placements. 🌀
+        <div>
+          <span className="gradient-text" style={{ fontWeight: 700 }}>VortexRAG v1.1</span>
+          {" "}— Enterprise Codebase Intelligence Platform. Powered by GraphRAG & Semantic Search. 🌀
+        </div>
+        <div style={{ fontSize: "0.8rem", color: "var(--color-text-faint)" }}>
+          Architected & Engineered by <a href="https://github.com/sakshamkamra33" target="_blank" rel="noreferrer" style={{ color: "var(--color-text)", fontWeight: 600, textDecoration: "none" }}>Saksham Kamra</a>
+        </div>
       </footer>
     </div>
   );
