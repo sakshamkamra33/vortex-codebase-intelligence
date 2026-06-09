@@ -172,11 +172,6 @@ export default function GraphExplorerPage() {
               linkDirectionalArrowLength={3.5}
               linkDirectionalArrowRelPos={1}
               backgroundColor="#0a0a0f"
-              d3Force={(d3: any) => {
-                // Adjust physics forces for a better spread
-                d3.force("charge").strength(-400);
-                d3.force("link").distance(50);
-              }}
               onNodeClick={(node: any) => {
                 // Center camera on node when clicked
                 fgRef.current.centerAt(node.x, node.y, 1000);
