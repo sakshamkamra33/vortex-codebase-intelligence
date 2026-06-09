@@ -14,7 +14,7 @@ export default function GraphExplorerPage() {
   const [data, setData] = useState<GraphData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const fgRef = useRef<any>();
+  const fgRef = useRef<any>(null);
 
   // Determine color based on node type
   const getNodeColor = (label: string) => {
