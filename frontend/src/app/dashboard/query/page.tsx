@@ -5,6 +5,7 @@ import Link from "next/link";
 
 export default function QueryPage() {
   const [query, setQuery] = useState("");
+  const [repoId, setRepoId] = useState("sakshamkamra33/vortex-codebase-intelligence_main");
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [statusMessage, setStatusMessage] = useState("Initializing RAG Agent...");
   const [answer, setAnswer] = useState("");
@@ -34,7 +35,7 @@ export default function QueryPage() {
           Authorization: `Bearer ${token}`,
           Accept: "text/event-stream"
         },
-        body: JSON.stringify({ question: query, use_cache: true })
+        body: JSON.stringify({ question: query, repo_id: repoId, use_cache: true })
       });
 
       if (!res.ok) {
@@ -121,7 +122,16 @@ export default function QueryPage() {
               <span style={{ color: "var(--color-text-muted)" }}>RAG</span>
             </span>
           </div>
-          <span className="badge badge-purple">Phase 3 Streaming Active</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <input 
+              type="text" 
+              style={{ padding: "6px 12px", fontSize: "0.85rem", width: 300, background: "rgba(255,255,255,0.05)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", color: "var(--color-text)" }}
+              value={repoId}
+              onChange={(e) => setRepoId(e.target.value)}
+              placeholder="github_user/repo_branch"
+            />
+            <span className="badge badge-purple">Phase 3 Streaming Active</span>
+          </div>
         </div>
       </header>
 
