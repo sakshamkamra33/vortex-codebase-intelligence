@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
-import ForceGraph2D from "react-force-graph-2d";
+import dynamic from "next/dynamic";
+
+const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), { ssr: false });
 
 interface GraphData {
   nodes: { id: string; label: string; name: string }[];
