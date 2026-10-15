@@ -4,7 +4,6 @@ Automated benchmarking for the RAG pipeline.
 """
 import logging
 from typing import Dict, Any
-from datasets import Dataset
 
 # In a full production env, we'd use these:
 # from ragas import evaluate

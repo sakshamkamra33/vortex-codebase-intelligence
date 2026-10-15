@@ -41,8 +41,7 @@ rank-bm25==0.2.2
 langfuse==2.40.0
 
 # ── Evaluation (Ragas) ────────────────────────
-ragas==0.1.14
-datasets==2.19.1
+# ragas and datasets removed to avoid pyarrow/numpy 2.0 version conflict
 
 # ── Auth ──────────────────────────────────────
 python-jose[cryptography]==3.3.0
