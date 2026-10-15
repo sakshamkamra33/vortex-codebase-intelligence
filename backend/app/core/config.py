@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""  # Left for backwards compatibility
     OPENAI_MODEL: str = "gpt-4o"
     GROQ_API_KEY: str = ""
-    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+    GROQ_MODEL: str = "qwen/qwen3.8-27b"
     # Google Gemini — free embeddings (100 RPM, no payment needed)
     # Get key at: https://aistudio.google.com/apikey
     GOOGLE_API_KEY: str = ""

@@ -64,9 +64,13 @@ export default function IngestPage() {
           if (data.status === "completed") {
             clearInterval(intervalId);
             setStatus("success");
-            setMessage("Ingestion complete! Redirecting...");
+            const newRepoId = data.result?.repo_id || "vortex-codebase-intelligence_main";
+            if (typeof window !== "undefined") {
+              localStorage.setItem("vortex_active_repo", newRepoId);
+            }
+            setMessage(`Ingestion complete for ${newRepoId}! Redirecting...`);
             setTimeout(() => {
-              router.push("/dashboard/query");
+              router.push(`/dashboard/query?repo_id=${encodeURIComponent(newRepoId)}`);
             }, 1500);
           } else if (data.status === "failed") {
             clearInterval(intervalId);

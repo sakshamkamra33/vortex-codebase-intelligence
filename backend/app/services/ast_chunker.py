@@ -22,6 +22,8 @@ LANGUAGE_EXTENSIONS: dict[str, list[str]] = {
     "typescript": [".ts", ".tsx"],
     "java":       [".java"],
     "go":         [".go"],
+    "cpp":        [".cpp", ".c", ".h", ".hpp", ".cc"],
+    "rust":       [".rs"],
 }
 
 # tree-sitter grammar package names
@@ -170,9 +172,7 @@ class ASTChunker:
         Returns:
             List of CodeChunk objects.
         """
-        language = self.detect_language(file_path)
-        if language is None or language not in self._parsers:
-            return []
+        rel_path = str(file_path.relative_to(repo_root)) if repo_root else str(file_path)
 
         try:
             source = file_path.read_bytes()
@@ -183,25 +183,60 @@ class ASTChunker:
         if len(source) == 0 or len(source) > 500_000:  # Skip empty or huge files
             return []
 
-        parser = self._parsers[language]
-        tree = parser.parse(source)
         source_str = source.decode("utf-8", errors="replace")
+        language = self.detect_language(file_path)
 
-        rel_path = str(file_path.relative_to(repo_root)) if repo_root else str(file_path)
-        target_node_types = CHUNK_NODE_TYPES.get(language, [])
+        if language and language in self._parsers:
+            parser = self._parsers[language]
+            tree = parser.parse(source)
+            target_node_types = CHUNK_NODE_TYPES.get(language, [])
+            chunks: list[CodeChunk] = []
+            self._extract_chunks(
+                node=tree.root_node,
+                source=source_str,
+                language=language,
+                file_path=rel_path,
+                repo_id=repo_id,
+                target_types=target_node_types,
+                chunks=chunks,
+                parent_class=None,
+            )
+            return chunks
 
+        # Universal fallback for C++, C, Rust, etc.
+        suffix = file_path.suffix.lower()
+        if suffix in {".cpp", ".c", ".h", ".hpp", ".rs", ".cs", ".rb", ".php"}:
+            return self._chunk_fallback(source_str, rel_path, repo_id, suffix.lstrip("."))
+
+        return []
+
+    def _chunk_fallback(self, source_str: str, file_path: str, repo_id: str, lang: str) -> list[CodeChunk]:
+        """Fallback block chunker for languages without a dedicated tree-sitter parser."""
+        lines = source_str.splitlines()
         chunks: list[CodeChunk] = []
-        self._extract_chunks(
-            node=tree.root_node,
-            source=source_str,
-            language=language,
-            file_path=rel_path,
-            repo_id=repo_id,
-            target_types=target_node_types,
-            chunks=chunks,
-            parent_class=None,
-        )
-
+        chunk_size = 40
+        for i in range(0, len(lines), chunk_size):
+            block = lines[i:i + chunk_size]
+            code = "\n".join(block).strip()
+            if not code or len(code) < 30:
+                continue
+            start_line = i + 1
+            end_line = min(i + chunk_size, len(lines))
+            name = f"{Path(file_path).stem}_block_{start_line}"
+            chunk_id = hashlib.sha256(f"{repo_id}:{file_path}:{start_line}:{name}".encode()).hexdigest()[:16]
+            chunks.append(
+                CodeChunk(
+                    id=chunk_id,
+                    repo_id=repo_id,
+                    file_path=file_path,
+                    language=lang,
+                    node_type="code_block",
+                    name=name,
+                    code=code,
+                    start_line=start_line,
+                    end_line=end_line,
+                )
+            )
         return chunks
 
     def chunk_repository(
@@ -226,7 +261,8 @@ class ASTChunker:
         if exclude_dirs is None:
             exclude_dirs = {
                 ".git", "node_modules", "__pycache__", ".venv", "venv",
-                "dist", "build", ".next", "vendor", "target",
+                "dist", "build", ".next", "vendor", "target", "tests",
+                "test", "docs", "examples", "spec", "__tests__", ".github"
             }
 
         all_chunks: list[CodeChunk] = []
@@ -238,6 +274,11 @@ class ASTChunker:
             if any(excl in file_path.parts for excl in exclude_dirs):
                 continue
             if not file_path.is_file():
+                continue
+
+            # Skip test files directly
+            fname = file_path.name.lower()
+            if fname.startswith("test_") or fname.endswith("_test.py") or ".test." in fname or ".spec." in fname:
                 continue
 
             lang = self.detect_language(file_path)

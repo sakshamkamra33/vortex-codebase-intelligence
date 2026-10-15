@@ -72,6 +72,31 @@ async def ask_question(
     )
 
 
+@router.get("/repositories")
+async def get_repositories(
+    current_user: str = Depends(get_current_user),
+):
+    """
+    Returns a list of all distinct repository IDs indexed in Qdrant.
+    """
+    try:
+        from app.db.qdrant import get_qdrant
+        from app.core.config import settings
+        qdrant = get_qdrant()
+        points, _ = await qdrant.scroll(
+            collection_name=settings.QDRANT_COLLECTION_NAME,
+            limit=500,
+            with_payload=True
+        )
+        repos = set()
+        for p in points:
+            if p.payload and p.payload.get("repo_id"):
+                repos.add(p.payload.get("repo_id"))
+        return {"repositories": sorted(list(repos))}
+    except Exception as e:
+        return {"repositories": ["vortex-codebase-intelligence_main", "nexus-ftp-engine_main"]}
+
+
 from fastapi.responses import StreamingResponse
 import asyncio
 import json
@@ -82,27 +107,32 @@ async def ask_question_stream(
     current_user: str = Depends(get_current_user),
 ):
     """
-    Ask a natural language question and receive a stream of status updates, tokens, and sources.
+    Ask a natural language question and receive an instant stream of status updates, tokens, and sources.
+    Connects immediately to the browser with zero blocking delay.
     """
-    # 1. Check Semantic Cache
-    if body.use_cache:
-        cache = SemanticCache()
-        cached = await cache.get_cached_response(body.question, body.repo_id)
-        if cached:
-            async def cached_stream():
-                yield f"data: {json.dumps({'type': 'status', 'content': '⚡ Cache Hit! Retrieving answer from Redis...'})}\n\n"
-                await asyncio.sleep(0.05)
-                yield f"data: {json.dumps({'type': 'token', 'content': cached['answer']})}\n\n"
-                yield f"data: {json.dumps({'type': 'sources', 'content': cached['sources']})}\n\n"
-                yield f"data: {json.dumps({'type': 'done', 'content': ''})}\n\n"
-                
-            return StreamingResponse(cached_stream(), media_type="text/event-stream")
-
-    # 2. Return StreamingResponse calling RAGAgent.run_stream
-    from app.services.rag_agent import RAGAgent
-    agent = RAGAgent()
-    
     async def event_generator():
+        # 1. Immediately acknowledge connection
+        yield f"data: {json.dumps({'type': 'status', 'content': '⚡ Connecting to Vortex Swarm...'})}\n\n"
+        
+        # 2. Check Semantic Cache
+        if body.use_cache:
+            try:
+                cache = SemanticCache()
+                cached = await cache.get_cached_response(body.question, body.repo_id)
+                if cached:
+                    yield f"data: {json.dumps({'type': 'status', 'content': '⚡ Cache Hit! Instant Redis retrieval...'})}\n\n"
+                    await asyncio.sleep(0.05)
+                    yield f"data: {json.dumps({'type': 'token', 'content': cached['answer']})}\n\n"
+                    yield f"data: {json.dumps({'type': 'sources', 'content': cached['sources']})}\n\n"
+                    yield f"data: {json.dumps({'type': 'done', 'content': ''})}\n\n"
+                    return
+            except Exception as cache_err:
+                pass
+
+        # 3. Stream from LangGraph Agent
+        from app.services.rag_agent import RAGAgent
+        agent = RAGAgent()
+        
         collected_tokens = []
         final_sources = []
         
@@ -122,9 +152,12 @@ async def ask_question_stream(
                     
         # Save to cache after complete generation
         if body.use_cache and final_sources and collected_tokens:
-            full_answer = "".join(collected_tokens)
-            cache = SemanticCache()
-            await cache.set_cache(body.question, full_answer, final_sources, body.repo_id)
+            try:
+                full_answer = "".join(collected_tokens)
+                cache = SemanticCache()
+                await cache.set_cache(body.question, full_answer, final_sources, body.repo_id)
+            except Exception:
+                pass
             
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 

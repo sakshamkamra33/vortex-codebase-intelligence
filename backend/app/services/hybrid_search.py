@@ -58,6 +58,31 @@ class HybridSearcher:
             with_payload=True
         )
 
+        if not search_result and repo_id:
+            alt_repo_id = None
+            if "_master" in repo_id:
+                alt_repo_id = repo_id.replace("_master", "_main")
+            elif "_main" in repo_id:
+                alt_repo_id = repo_id.replace("_main", "_master")
+                
+            if alt_repo_id:
+                logger.info(f"Retrying search with alternative branch repo_id: {alt_repo_id}")
+                alt_filter = Filter(
+                    must=[
+                        FieldCondition(
+                            key="repo_id",
+                            match=MatchValue(value=alt_repo_id)
+                        )
+                    ]
+                )
+                search_result = await self.qdrant.search(
+                    collection_name=self.collection,
+                    query_vector=query_vector,
+                    query_filter=alt_filter,
+                    limit=candidate_limit,
+                    with_payload=True
+                )
+
         if not search_result:
             logger.info("⚠️ No candidates retrieved from Qdrant.")
             return []

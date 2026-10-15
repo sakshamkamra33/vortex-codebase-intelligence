@@ -1,12 +1,44 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 
 export default function QueryPage() {
   const [query, setQuery] = useState("");
-  const [repoId, setRepoId] = useState("sakshamkamra33/vortex-codebase-intelligence_main");
+  const [repoId, setRepoId] = useState("nexus-ftp-engine_main");
+  const [availableRepos, setAvailableRepos] = useState<string[]>([
+    "nexus-ftp-engine_main",
+    "vortex-codebase-intelligence_main",
+    "starlette_main",
+    "devops-ci-cd-dashboard_main"
+  ]);
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      let urlRepo = urlParams.get("repo_id");
+      let storedRepo = localStorage.getItem("vortex_active_repo");
+      
+      let active = urlRepo || storedRepo || "nexus-ftp-engine_main";
+      if (active === "nexus-ftp-engine_master") active = "nexus-ftp-engine_main";
+      
+      setRepoId(active);
+      localStorage.setItem("vortex_active_repo", active);
+
+      // Fetch dynamic repositories from backend
+      fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/query/repositories`, {
+        headers: { Authorization: "Bearer dummy-token-for-now" }
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.repositories && data.repositories.length > 0) {
+            setAvailableRepos(data.repositories);
+          }
+        })
+        .catch(() => {});
+    }
+  }, []);
   const [statusMessage, setStatusMessage] = useState("Initializing RAG Agent...");
   const [answer, setAnswer] = useState("");
   const [sources, setSources] = useState<any[]>([]);
@@ -35,7 +67,7 @@ export default function QueryPage() {
           Authorization: `Bearer ${token}`,
           Accept: "text/event-stream"
         },
-        body: JSON.stringify({ question: query, repo_id: repoId, use_cache: true })
+        body: JSON.stringify({ question: query, repo_id: repoId, top_k: 3, use_cache: true })
       });
 
       if (!res.ok) {
@@ -122,16 +154,34 @@ export default function QueryPage() {
               <span style={{ color: "var(--color-text-muted)" }}>RAG</span>
             </span>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <input 
-              type="text" 
-              style={{ padding: "6px 12px", fontSize: "0.85rem", width: 300, background: "rgba(255,255,255,0.05)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", color: "var(--color-text)" }}
-              value={repoId}
-              onChange={(e) => setRepoId(e.target.value)}
-              placeholder="github_user/repo_branch"
-            />
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: "0.8rem", color: "var(--color-text-muted)" }}>Target Repo:</span>
+              <select
+                style={{
+                  padding: "6px 12px",
+                  fontSize: "0.85rem",
+                  background: "#12121a",
+                  border: "1px solid var(--color-border)",
+                  borderRadius: "var(--radius-md)",
+                  color: "#a78bfa",
+                  fontWeight: 600,
+                  outline: "none",
+                  cursor: "pointer"
+                }}
+                value={repoId}
+                onChange={(e) => {
+                  setRepoId(e.target.value);
+                  localStorage.setItem("vortex_active_repo", e.target.value);
+                }}
+              >
+                {availableRepos.map((repo) => (
+                  <option key={repo} value={repo} style={{ background: "#0a0a0f", color: "#fff" }}>
+                    📦 {repo}
+                  </option>
+                ))}
+              </select>
+            </div>
             <span className="badge badge-purple">Phase 3 Streaming Active</span>
-          </div>
         </div>
       </header>
 

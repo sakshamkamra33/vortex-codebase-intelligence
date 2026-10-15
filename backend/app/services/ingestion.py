@@ -37,21 +37,47 @@ class IngestionPipeline:
         """
         Full ingestion pipeline: Clone -> Chunk -> Embed -> Qdrant -> Neo4j.
         """
-        logger.info(f"🚀 Starting ingestion pipeline for {repo_url}")
-        
-        repo_name = repo_url.rstrip("/").split("/")[-1]
+        repo_name = repo_url.rstrip("/").split("/")[-1].replace(".git", "")
         repo_id = f"{repo_name}_{branch}"
         
-        # 1. Clone Repo
-        temp_dir = tempfile.mkdtemp(prefix=f"vortex_{repo_name}_")
+        # 1. Determine source (Local workspace or Remote Git)
+        local_dir = None
+        temp_dir = None
+
+        # If repo_url is a local path or matches current project
+        if os.path.exists(repo_url) and os.path.isdir(repo_url):
+            local_dir = Path(repo_url)
+        elif "vortex-codebase-intelligence" in repo_url or "vortex-rag" in repo_url:
+            cwd = Path(os.getcwd())
+            workspace_root = cwd.parent if cwd.name == "backend" else cwd
+            if (workspace_root / "backend").exists():
+                logger.info(f"⚡ Ingesting local workspace directly: {workspace_root}")
+                local_dir = workspace_root
+
         try:
-            logger.info(f"Cloning {repo_url} branch {branch} to {temp_dir}...")
-            # Shallow clone for speed
-            git.Repo.clone_from(repo_url, temp_dir, branch=branch, depth=1)
+            if local_dir:
+                source_path = local_dir
+            else:
+                temp_dir = tempfile.mkdtemp(prefix=f"vortex_{repo_name}_")
+                logger.info(f"Cloning {repo_url} branch {branch} to {temp_dir}...")
+                try:
+                    git.Repo.clone_from(repo_url, temp_dir, branch=branch, depth=1)
+                except Exception as clone_err:
+                    # If cloning this repo failed due to network, check if it's the current workspace
+                    cwd = Path(os.getcwd())
+                    workspace_root = cwd.parent if cwd.name == "backend" else cwd
+                    if (workspace_root / "backend").exists():
+                        logger.warning(f"Network clone failed ({clone_err}). Falling back to local workspace.")
+                        temp_dir = None
+                        source_path = workspace_root
+                    else:
+                        raise clone_err
+                else:
+                    source_path = Path(temp_dir)
             
             # 2. Extract AST Chunks
             chunks = self.chunker.chunk_repository(
-                repo_root=Path(temp_dir),
+                repo_root=source_path,
                 repo_id=repo_id,
                 languages=languages
             )
@@ -78,14 +104,15 @@ class IngestionPipeline:
             raise
         finally:
             # Cleanup temp directory
-            shutil.rmtree(temp_dir, ignore_errors=True)
+            if temp_dir:
+                shutil.rmtree(temp_dir, ignore_errors=True)
 
     async def _store_in_vector_db(self, chunks: List[CodeChunk]):
         """Embeds chunks and stores them in Qdrant in batches."""
         import uuid
         logger.info(f"🔮 Embedding {len(chunks)} chunks and storing in Qdrant...")
         
-        batch_size = 50
+        batch_size = 20
         total_batches = (len(chunks) + batch_size - 1) // batch_size
         
         for i in range(0, len(chunks), batch_size):
@@ -126,6 +153,7 @@ class IngestionPipeline:
                 points=points
             )
             logger.info(f"✅ Upserted batch {batch_num}/{total_batches} → {len(points)} vectors in Qdrant")
+            await asyncio.sleep(0.5)
 
     async def sync_delta_repository(
         self,

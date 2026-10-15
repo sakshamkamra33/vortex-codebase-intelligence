@@ -4,6 +4,7 @@ Handles GitHub repository ingestion via AST chunking, embeddings, and graph buil
 """
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from pydantic import BaseModel
+from typing import Optional
 import logging
 import uuid
 
@@ -20,7 +21,7 @@ _jobs: dict[str, dict] = {}
 class IngestRequest(BaseModel):
     repo_url: str
     branch: str = "main"
-    languages: list[str] = ["python", "javascript", "typescript", "java", "go"]
+    languages: Optional[list[str]] = None
 
 
 class IngestResponse(BaseModel):
