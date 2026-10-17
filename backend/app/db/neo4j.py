@@ -36,10 +36,11 @@ async def init_neo4j() -> None:
     logger.info("✅ Neo4j schema constraints ensured.")
 
 
-def get_neo4j() -> AsyncDriver:
-    if _driver is None:
-        raise RuntimeError("Neo4j driver not initialized. Call init_neo4j() first.")
+from typing import Optional
+
+def get_neo4j() -> Optional[AsyncDriver]:
     return _driver
+
 
 
 async def close_neo4j() -> None:

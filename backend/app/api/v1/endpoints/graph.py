@@ -17,6 +17,12 @@ async def get_dependencies(
     Traverse Neo4j call graph and return dependency chain.
     """
     driver = get_neo4j()
+    if driver is None:
+        return {
+            "repo_id": repo_id,
+            "nodes": [],
+            "links": []
+        }
     
     query = """
     MATCH (n)-[r]->(m)
@@ -31,13 +37,14 @@ async def get_dependencies(
     nodes_dict = {}
     links = []
     
-    async with driver.session() as session:
-        result = await session.run(query, repo_id=repo_id)
-        records = await result.data()
-        
-        for record in records:
-            src_id = str(record["source_id"])
-            tgt_id = str(record["target_id"])
+    try:
+        async with driver.session() as session:
+            result = await session.run(query, repo_id=repo_id)
+            records = await result.data()
+            
+            for record in records:
+                src_id = str(record["source_id"])
+                tgt_id = str(record["target_id"])
             
             if src_id not in nodes_dict:
                 nodes_dict[src_id] = {"id": src_id, "label": record["source_label"], "name": record["source_name"]}
@@ -49,6 +56,8 @@ async def get_dependencies(
                 "target": tgt_id,
                 "type": record["rel_type"]
             })
+    except Exception as e:
+        logger.warning(f"Neo4j query failed: {e}")
             
     return {
         "repo_id": repo_id,

@@ -30,6 +30,9 @@ class SemanticCache:
         Check if a semantically similar query exists in the cache.
         Returns the cached response dict if found, else None.
         """
+        if self.redis is None:
+            return None
+
         logger.info(f"⚡ Checking semantic cache for query: '{query}'")
         try:
             query_emb = await self.embedder.embed_query(query)
@@ -89,6 +92,8 @@ class SemanticCache:
 
     async def set_cache(self, query: str, answer: str, sources: list, repo_id: Optional[str] = None) -> None:
         """Store a new query and its generated answer in the cache."""
+        if self.redis is None:
+            return
         try:
             query_emb = await self.embedder.embed_query(query)
             
@@ -116,26 +121,47 @@ class SemanticCache:
             
     async def get_stats(self) -> dict:
         """Retrieve cache hit/miss statistics."""
-        hits = await self.redis.get("vortex:stats:cache_hits") or "0"
-        misses = await self.redis.get("vortex:stats:cache_misses") or "0"
-        keys = await self.redis.keys(f"{self.prefix}*")
-        
-        h = int(hits)
-        m = int(misses)
-        total = h + m
-        hit_rate = (h / total * 100) if total > 0 else 0
-        
-        return {
-            "hits": h,
-            "misses": m,
-            "hit_rate_pct": round(hit_rate, 2),
-            "active_entries": len(keys)
-        }
+        if self.redis is None:
+            return {
+                "hits": 0,
+                "misses": 0,
+                "hit_rate_pct": 0.0,
+                "active_entries": 0
+            }
+        try:
+            hits = await self.redis.get("vortex:stats:cache_hits") or "0"
+            misses = await self.redis.get("vortex:stats:cache_misses") or "0"
+            keys = await self.redis.keys(f"{self.prefix}*")
+            
+            h = int(hits)
+            m = int(misses)
+            total = h + m
+            hit_rate = (h / total * 100) if total > 0 else 0
+            
+            return {
+                "hits": h,
+                "misses": m,
+                "hit_rate_pct": round(hit_rate, 2),
+                "active_entries": len(keys)
+            }
+        except Exception as e:
+            logger.error(f"Failed to fetch cache stats: {e}")
+            return {
+                "hits": 0,
+                "misses": 0,
+                "hit_rate_pct": 0.0,
+                "active_entries": 0
+            }
 
     async def flush(self) -> None:
         """Clear all cached queries and stats."""
-        keys = await self.redis.keys(f"{self.prefix}*")
-        if keys:
-            await self.redis.delete(*keys)
-        await self.redis.delete("vortex:stats:cache_hits")
-        await self.redis.delete("vortex:stats:cache_misses")
+        if self.redis is None:
+            return
+        try:
+            keys = await self.redis.keys(f"{self.prefix}*")
+            if keys:
+                await self.redis.delete(*keys)
+            await self.redis.delete("vortex:stats:cache_hits")
+            await self.redis.delete("vortex:stats:cache_misses")
+        except Exception as e:
+            logger.error(f"Failed to flush cache: {e}")

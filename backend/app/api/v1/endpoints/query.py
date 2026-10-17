@@ -38,38 +38,53 @@ async def ask_question(
     
     # 1. Check Semantic Cache
     if body.use_cache:
-        cache = SemanticCache()
-        cached = await cache.get_cached_response(body.question, body.repo_id)
-        if cached:
-            latency = (time.time() - start_time) * 1000
-            return QueryResponse(
-                answer=cached["answer"],
-                sources=cached["sources"],
-                cache_hit=True,
-                latency_ms=round(latency, 2)
-            )
+        try:
+            cache = SemanticCache()
+            cached = await cache.get_cached_response(body.question, body.repo_id)
+            if cached:
+                latency = (time.time() - start_time) * 1000
+                return QueryResponse(
+                    answer=cached["answer"],
+                    sources=cached["sources"],
+                    cache_hit=True,
+                    latency_ms=round(latency, 2)
+                )
+        except Exception:
+            pass
 
     # 2. LangGraph Agent (Retrieval + Generation + Self-Correction)
-    from app.services.rag_agent import RAGAgent
-    agent = RAGAgent()
-    
-    agent_result = await agent.run(body.question, body.repo_id)
-    
-    answer = agent_result["answer"]
-    sources = [{"file_path": c["file_path"], "name": c["name"], "score": c.get("score", 1.0)} for c in agent_result["sources"]]
+    try:
+        from app.services.rag_agent import RAGAgent
+        agent = RAGAgent()
+        
+        agent_result = await agent.run(body.question, body.repo_id)
+        
+        answer = agent_result["answer"]
+        sources = [{"file_path": c["file_path"], "name": c["name"], "score": c.get("score", 1.0)} for c in agent_result["sources"]]
 
-    # 4. Save to Cache
-    if body.use_cache and sources:
-        cache = SemanticCache()
-        await cache.set_cache(body.question, answer, sources, body.repo_id)
+        # 4. Save to Cache
+        if body.use_cache and sources:
+            try:
+                cache = SemanticCache()
+                await cache.set_cache(body.question, answer, sources, body.repo_id)
+            except Exception:
+                pass
 
-    latency = (time.time() - start_time) * 1000
-    return QueryResponse(
-        answer=answer,
-        sources=sources,
-        cache_hit=False,
-        latency_ms=round(latency, 2)
-    )
+        latency = (time.time() - start_time) * 1000
+        return QueryResponse(
+            answer=answer,
+            sources=sources,
+            cache_hit=False,
+            latency_ms=round(latency, 2)
+        )
+    except Exception as e:
+        latency = (time.time() - start_time) * 1000
+        return QueryResponse(
+            answer=f"⚠️ Query processing notice: {str(e)}",
+            sources=[],
+            cache_hit=False,
+            latency_ms=round(latency, 2)
+        )
 
 
 @router.get("/repositories")
@@ -130,34 +145,38 @@ async def ask_question_stream(
                 pass
 
         # 3. Stream from LangGraph Agent
-        from app.services.rag_agent import RAGAgent
-        agent = RAGAgent()
-        
-        collected_tokens = []
-        final_sources = []
-        
-        async for event_str in agent.run_stream(body.question, body.repo_id):
-            yield event_str
+        try:
+            from app.services.rag_agent import RAGAgent
+            agent = RAGAgent()
             
-            # Parse events to collect for the cache
-            if event_str.startswith("data:"):
+            collected_tokens = []
+            final_sources = []
+            
+            async for event_str in agent.run_stream(body.question, body.repo_id):
+                yield event_str
+                
+                # Parse events to collect for the cache
+                if event_str.startswith("data:"):
+                    try:
+                        data = json.loads(event_str[5:].strip())
+                        if data["type"] == "token":
+                            collected_tokens.append(data["content"])
+                        elif data["type"] == "sources":
+                            final_sources = data["content"]
+                    except Exception:
+                        pass
+                        
+            # Save to cache after complete generation
+            if body.use_cache and final_sources and collected_tokens:
                 try:
-                    data = json.loads(event_str[5:].strip())
-                    if data["type"] == "token":
-                        collected_tokens.append(data["content"])
-                    elif data["type"] == "sources":
-                        final_sources = data["content"]
+                    full_answer = "".join(collected_tokens)
+                    cache = SemanticCache()
+                    await cache.set_cache(body.question, full_answer, final_sources, body.repo_id)
                 except Exception:
                     pass
-                    
-        # Save to cache after complete generation
-        if body.use_cache and final_sources and collected_tokens:
-            try:
-                full_answer = "".join(collected_tokens)
-                cache = SemanticCache()
-                await cache.set_cache(body.question, full_answer, final_sources, body.repo_id)
-            except Exception:
-                pass
+        except Exception as stream_err:
+            yield f"data: {json.dumps({'type': 'token', 'content': f'\\n\\n⚠️ Query pipeline notice: {str(stream_err)}'})}\n\n"
+            yield f"data: {json.dumps({'type': 'done', 'content': ''})}\n\n"
             
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 

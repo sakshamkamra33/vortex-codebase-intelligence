@@ -34,7 +34,11 @@ class HybridSearcher:
         logger.info(f"🔍 Running Hybrid RRF Search for query: '{query}'")
         
         # 1. Generate dense query vector
-        query_vector = await self.embedder.embed_query(query)
+        query_vector = None
+        try:
+            query_vector = await self.embedder.embed_query(query)
+        except Exception as e:
+            logger.warning(f"Dense embedding failed or rate-limited: {e}. Falling back to BM25 sparse search...")
         
         # Build filter if repo_id is specified
         query_filter = None
@@ -48,40 +52,56 @@ class HybridSearcher:
                 ]
             )
 
-        # 2. Retrieve candidates from Qdrant (fetch more candidates to allow meaningful rank fusion)
+        # 2. Retrieve candidates from Qdrant
         candidate_limit = max(top_k * 4, 40)
-        search_result = await self.qdrant.search(
-            collection_name=self.collection,
-            query_vector=query_vector,
-            query_filter=query_filter,
-            limit=candidate_limit,
-            with_payload=True
-        )
+        search_result = []
 
-        if not search_result and repo_id:
-            alt_repo_id = None
-            if "_master" in repo_id:
-                alt_repo_id = repo_id.replace("_master", "_main")
-            elif "_main" in repo_id:
-                alt_repo_id = repo_id.replace("_main", "_master")
-                
-            if alt_repo_id:
-                logger.info(f"Retrying search with alternative branch repo_id: {alt_repo_id}")
-                alt_filter = Filter(
-                    must=[
-                        FieldCondition(
-                            key="repo_id",
-                            match=MatchValue(value=alt_repo_id)
-                        )
-                    ]
-                )
-                search_result = await self.qdrant.search(
+        if query_vector:
+            search_result = await self.qdrant.search(
+                collection_name=self.collection,
+                query_vector=query_vector,
+                query_filter=query_filter,
+                limit=candidate_limit,
+                with_payload=True
+            )
+
+            if not search_result and repo_id:
+                alt_repo_id = None
+                if "_master" in repo_id:
+                    alt_repo_id = repo_id.replace("_master", "_main")
+                elif "_main" in repo_id:
+                    alt_repo_id = repo_id.replace("_main", "_master")
+                    
+                if alt_repo_id:
+                    logger.info(f"Retrying search with alternative branch repo_id: {alt_repo_id}")
+                    alt_filter = Filter(
+                        must=[
+                            FieldCondition(
+                                key="repo_id",
+                                match=MatchValue(value=alt_repo_id)
+                            )
+                        ]
+                    )
+                    search_result = await self.qdrant.search(
+                        collection_name=self.collection,
+                        query_vector=query_vector,
+                        query_filter=alt_filter,
+                        limit=candidate_limit,
+                        with_payload=True
+                    )
+        else:
+            # Fallback to payload scroll if vector embedding failed
+            try:
+                points, _ = await self.qdrant.scroll(
                     collection_name=self.collection,
-                    query_vector=query_vector,
-                    query_filter=alt_filter,
+                    scroll_filter=query_filter,
                     limit=candidate_limit,
                     with_payload=True
                 )
+                search_result = points
+            except Exception as scroll_err:
+                logger.error(f"Fallback scroll failed: {scroll_err}")
+                search_result = []
 
         if not search_result:
             logger.info("⚠️ No candidates retrieved from Qdrant.")
@@ -95,7 +115,7 @@ class HybridSearcher:
                 "file_path": hit.payload.get("file_path"),
                 "name": hit.payload.get("name"),
                 "language": hit.payload.get("language"),
-                "dense_score": hit.score,
+                "dense_score": getattr(hit, "score", 0.5),
                 "code": hit.payload.get("code") or "",
                 "start_line": hit.payload.get("start_line")
             })

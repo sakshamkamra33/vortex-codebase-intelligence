@@ -33,7 +33,8 @@ async def init_redis() -> None:
     logger.info("✅ Redis connected.")
 
 
-def get_redis() -> aioredis.Redis:
-    if _redis is None:
-        raise RuntimeError("Redis client not initialized. Call init_redis() first.")
+from typing import Optional
+
+def get_redis() -> Optional[aioredis.Redis]:
     return _redis
+
