@@ -19,6 +19,8 @@ env/
 previous_chat_log.txt
 *.pem
 *.key
+scratch/
+
 
 # ── Node.js ───────────────────────────────────
 node_modules/
